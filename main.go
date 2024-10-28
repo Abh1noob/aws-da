@@ -8,12 +8,14 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
 func main() {
-	// Load environment variables from .env file if present
+
 	err := godotenv.Load()
 	if err != nil {
 		log.Println("No .env file found, using system environment variables")
@@ -38,6 +40,16 @@ func main() {
 
 	e := echo.New()
 
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{echo.GET, echo.POST, echo.PUT, echo.DELETE, echo.OPTIONS},
+		AllowHeaders: []string{
+			echo.HeaderOrigin,
+			echo.HeaderContentType,
+			echo.HeaderAccept,
+		},
+	}))
+
 	fileController := &controller.FileController{
 		S3Client:   s3Client,
 		BucketName: s3BucketName,
@@ -45,6 +57,5 @@ func main() {
 
 	routes.RegisterRoutes(e, fileController)
 
-	// Start the Echo server
 	e.Logger.Fatal(e.Start(":8080"))
 }
