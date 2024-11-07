@@ -74,5 +74,5 @@ func main() {
 		return c.String(http.StatusOK, fmt.Sprintf("File uploaded successfully: %s", objectName))
 	})
 
-	e.Logger.Fatal(e.Start(":8080"))
+	e.Logger.Fatal(e.Start(":80"))
 }
