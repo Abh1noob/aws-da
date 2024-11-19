@@ -113,23 +113,27 @@ func getEmailFromJWT(c echo.Context) (string, error) {
 }
 
 func (fc *FileController) ListPublicImages(c echo.Context) error {
-	var imageURLs []string
+	var images []map[string]string
 
-	rows, err := fc.DB.Query("SELECT image_url FROM posts WHERE is_visible = true")
+	rows, err := fc.DB.Query("SELECT username, image_url FROM posts join users on posts.email=users.email WHERE is_visible = true")
 	if err != nil {
 		return c.String(http.StatusInternalServerError, fmt.Sprintf("Error fetching public images: %v", err))
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var imageURL string
-		if err := rows.Scan(&imageURL); err != nil {
+		var username, imageURL string
+		if err := rows.Scan(&username, &imageURL); err != nil {
 			return c.String(http.StatusInternalServerError, fmt.Sprintf("Error scanning row: %v", err))
 		}
-		imageURLs = append(imageURLs, imageURL)
+
+		images = append(images, map[string]string{
+			"username": username,
+			"image":    imageURL,
+		})
 	}
 
-	return c.JSON(http.StatusOK, imageURLs)
+	return c.JSON(http.StatusOK, images)
 }
 
 func (fc *FileController) ListPrivateImages(c echo.Context) error {
@@ -141,7 +145,7 @@ func (fc *FileController) ListPrivateImages(c echo.Context) error {
 		return c.String(http.StatusUnauthorized, "Invalid token for private")
 	}
 
-	rows, err := fc.DB.Query("SELECT image_url FROM posts WHERE is_visible = false AND email = $1", userEmail)
+	rows, err := fc.DB.Query("SELECT username, image_url FROM posts join users on posts.email=users.email WHERE is_visible = false AND email = $1", userEmail)
 	if err != nil {
 		return c.String(http.StatusInternalServerError, fmt.Sprintf("Error fetching private images: %v", err))
 	}
