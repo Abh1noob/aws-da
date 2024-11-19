@@ -61,6 +61,7 @@ func (fc *FileController) UploadFile(c echo.Context) error {
 	defer src.Close()
 
 	fileName := fmt.Sprintf("%d-%s", time.Now().UnixNano(), file.Filename)
+	imageURL := fmt.Sprintf("https://%s.s3.amazonaws.com/%s", fc.BucketName, fileName)
 
 	_, err = fc.S3Client.PutObject(c.Request().Context(), fc.BucketName, fileName, src, file.Size, minio.PutObjectOptions{
 		ContentType: file.Header.Get("Content-Type"),
@@ -71,7 +72,7 @@ func (fc *FileController) UploadFile(c echo.Context) error {
 
 	isVisible := c.FormValue("is_visible") == "true"
 
-	_, err = fc.DB.Exec("INSERT INTO posts (email, image_url, is_visible) VALUES ($1, $2, $3)", userEmail, fileName, isVisible)
+	_, err = fc.DB.Exec("INSERT INTO posts (email, image_url, is_visible) VALUES ($1, $2, $3)", userEmail, imageURL, isVisible)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, fmt.Sprintf("Error saving file info to database: %v", err))
 	}
