@@ -3,39 +3,55 @@ package middleware
 import (
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 )
 
-func JWTMiddleware(secret string) echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
+func JWTMiddleware(secretKey string) echo.MiddlewareFunc {
+	return echo.MiddlewareFunc(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-
 			authHeader := c.Request().Header.Get("Authorization")
-			if authHeader == "" || len(authHeader) < 7 || authHeader[:7] != "Bearer " {
-				return echo.NewHTTPError(http.StatusUnauthorized, "Missing or invalid token")
+			if authHeader == "" {
+				return c.JSON(http.StatusUnauthorized, "Missing token")
 			}
 
-			tokenStr := authHeader[7:]
+			parts := strings.Split(authHeader, " ")
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				return c.JSON(http.StatusUnauthorized, "Invalid token format")
+			}
 
-			token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+			tokenString := parts[1]
+			fmt.Println("Received Token: ", tokenString)
 
-				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 				}
-				return []byte(secret), nil
-
+				return []byte(secretKey), nil
 			})
 
 			if err != nil || !token.Valid {
-				return echo.NewHTTPError(http.StatusUnauthorized, "Invalid token")
+				return c.JSON(http.StatusUnauthorized, "Invalid token in middleware")
 			}
 
-			claims := token.Claims.(jwt.MapClaims)
-			c.Set("user", claims)
+			claims, ok := token.Claims.(jwt.MapClaims)
+			if !ok {
+				return c.JSON(http.StatusUnauthorized, "Invalid token claims")
+			}
+
+			fmt.Println("Claims: ", claims)
+
+			if exp, ok := claims["exp"].(float64); ok && time.Now().Unix() > int64(exp) {
+				return c.JSON(http.StatusUnauthorized, "Token has expired")
+			}
+
+			c.Set("user", claims["email"])
 
 			return next(c)
 		}
-	}
+	})
 }

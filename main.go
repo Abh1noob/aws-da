@@ -5,6 +5,7 @@ import (
 	customMiddleware "aws-da/internal/middlewares"
 
 	"aws-da/internal/routes"
+	"database/sql"
 	"log"
 	"os"
 
@@ -25,13 +26,14 @@ func main() {
 		log.Println("No .env file found, using system environment variables")
 	}
 
-	s3Endpoint := os.Getenv("S3_ENDPOINT")
-	s3AccessKey := os.Getenv("S3_ACCESS_KEY")
-	s3SecretKey := os.Getenv("S3_SECRET_KEY")
-	s3BucketName := os.Getenv("S3_BUCKET_NAME")
+	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
 
-	if s3Endpoint == "" {
-		log.Fatalln("S3_ENDPOINT environment variable is not set")
+	if err := db.Ping(); err != nil {
+		log.Fatalf("Failed to ping database: %v", err)
 	}
 
 	s3Client, err := minio.New(os.Getenv("S3_ENDPOINT"), &minio.Options{
@@ -52,6 +54,7 @@ func main() {
 	fileController := &controllers.FileController{
 		S3Client:   s3Client,
 		BucketName: os.Getenv("S3_BUCKET_NAME"),
+		DB:         db, // Pass DB connection here
 	}
 
 	jwtSecret := os.Getenv("JWT_SECRET")
