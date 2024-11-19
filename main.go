@@ -1,14 +1,18 @@
 package main
 
 import (
-	controller "aws-da/internal/controllers"
+	"aws-da/internal/controllers"
+	customMiddleware "aws-da/internal/middlewares"
+
 	"aws-da/internal/routes"
 	"log"
 	"os"
 
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	echoMiddleware "github.com/labstack/echo/v4/middleware"
+
+	_ "github.com/lib/pq"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -30,8 +34,8 @@ func main() {
 		log.Fatalln("S3_ENDPOINT environment variable is not set")
 	}
 
-	s3Client, err := minio.New(s3Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(s3AccessKey, s3SecretKey, ""),
+	s3Client, err := minio.New(os.Getenv("S3_ENDPOINT"), &minio.Options{
+		Creds:  credentials.NewStaticV4(os.Getenv("S3_ACCESS_KEY"), os.Getenv("S3_SECRET_KEY"), ""),
 		Secure: true,
 	})
 	if err != nil {
@@ -40,22 +44,21 @@ func main() {
 
 	e := echo.New()
 
-	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowOrigins: []string{"*"},
-		AllowMethods: []string{echo.GET, echo.POST, echo.PUT, echo.DELETE, echo.OPTIONS},
-		AllowHeaders: []string{
-			echo.HeaderOrigin,
-			echo.HeaderContentType,
-			echo.HeaderAccept,
-		},
-	}))
+	e.Use(echoMiddleware.CORS())
+	e.Use(echoMiddleware.Logger())
+	e.Use(echoMiddleware.Recover())
 
-	fileController := &controller.FileController{
+	authController := &controllers.AuthController{DB: db}
+	fileController := &controllers.FileController{
 		S3Client:   s3Client,
-		BucketName: s3BucketName,
+		BucketName: os.Getenv("S3_BUCKET_NAME"),
 	}
 
-	routes.RegisterRoutes(e, fileController)
+	jwtSecret := os.Getenv("JWT_SECRET")
+	jwtMiddleware := customMiddleware.JWTMiddleware(jwtSecret)
+
+	routes.RegisterAuthRoutes(e, authController)
+	routes.RegisterS3Routes(e, fileController, jwtMiddleware)
 
 	e.Logger.Fatal(e.Start(":8080"))
 }
