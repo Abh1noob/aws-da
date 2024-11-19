@@ -62,7 +62,7 @@ func (ac *AuthController) Login(c echo.Context) error {
 		"exp":   time.Now().Add(time.Hour * 24).Unix(),
 	})
 
-	jwtSecret := os.Getenv("JWT_SECRET")
+	jwtSecret := []byte(os.Getenv("JWT_SECRET"))
 	tokenString, err := token.SignedString(jwtSecret)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, "Failed to generate token")
