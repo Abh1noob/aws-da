@@ -139,26 +139,34 @@ func (fc *FileController) ListPublicImages(c echo.Context) error {
 func (fc *FileController) ListPrivateImages(c echo.Context) error {
 
 	userEmail, err := getEmailFromJWT(c)
-	fmt.Println("User email:", userEmail)
-	fmt.Println("Error for fetching private:", err)
 	if err != nil {
+		fmt.Println("Error fetching user email:", err)
 		return c.String(http.StatusUnauthorized, "Invalid token for private")
 	}
 
-	rows, err := fc.DB.Query("SELECT username, image_url FROM posts join users on posts.email=users.email WHERE is_visible = false AND email = $1", userEmail)
+	fmt.Println("User email:", userEmail)
+
+	rows, err := fc.DB.Query(
+		"SELECT username, image_url FROM posts JOIN users ON posts.email = users.email WHERE is_visible = false AND posts.email = $1",
+		userEmail,
+	)
 	if err != nil {
 		return c.String(http.StatusInternalServerError, fmt.Sprintf("Error fetching private images: %v", err))
 	}
 	defer rows.Close()
 
-	var imageURLs []string
+	var images []map[string]string
 	for rows.Next() {
-		var imageURL string
-		if err := rows.Scan(&imageURL); err != nil {
+		var username, imageURL string
+		if err := rows.Scan(&username, &imageURL); err != nil {
 			return c.String(http.StatusInternalServerError, fmt.Sprintf("Error scanning row: %v", err))
 		}
-		imageURLs = append(imageURLs, imageURL)
+
+		images = append(images, map[string]string{
+			"username": username,
+			"image":    imageURL,
+		})
 	}
 
-	return c.JSON(http.StatusOK, imageURLs)
+	return c.JSON(http.StatusOK, images)
 }
